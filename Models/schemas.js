@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+const passportLocalMongoose = require('passport-local-mongoose');
+
 //productSchema
 const productSchema = new Schema({
     title:{
@@ -33,24 +35,22 @@ const productSchema = new Schema({
 
 //userSchema
 const userSchema = new Schema({
-    firstName:{
+    /*userName:{
         type: String,
         maxlength: 40,
-        required: true
-    },
-    lastName:{
-        type: String,
-        maxlength: 40,
-        required: true
-    },
+        required: true,
+        unique: true
+    },*/
     email:{
         type: String,
         maxlength: 100,
-        required: true
+        required: true,
+        unique: true
     },
     products: [{type: Schema.Types.ObjectId, ref: 'Product'}],
     reviews:[{type: Schema.Types.ObjectId, ref: 'Review'}]
 });
+userSchema.plugin(passportLocalMongoose);
 
 //reviewSchema
 const reviewSchema = new Schema({
