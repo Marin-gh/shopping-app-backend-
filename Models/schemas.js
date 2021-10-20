@@ -35,7 +35,7 @@ const productSchema = new Schema({
 
 //userSchema
 const userSchema = new Schema({
-    /*userName:{
+    /*username:{
         type: String,
         maxlength: 40,
         required: true,

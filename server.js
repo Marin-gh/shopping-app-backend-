@@ -6,7 +6,8 @@ const { Product, User, Review } = require('./Models/schemas.js');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
-const cookieParser = require('cookie-parser');
+//const cookieParser = require('cookie-parser');
+const { isLoggedIn, isProductAuthor, isReviewAuthor } = require('./helper.js');
 
 //connecting to db
 async function connectDB(){
@@ -31,9 +32,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 //middleware for cookie parser
-app.use(cookieParser("thisisnotagoodsecret"));
+//app.use(cookieParser("thisisnotagoodsecret"));
 //middleware for session
-app.use(session({secret:"thisisnotagoodsecret", resave: false, saveUninitialized: true, cookie: {expires: Date.now()+1000*60*60*24*7}}));
+app.use(session({secret:"thisisnotagoodsecret", resave: false, saveUninitialized: true}));
 
 //middleware for initializing passport
 app.use(passport.initialize());
@@ -44,11 +45,10 @@ passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
 
-
 //dohvati iz baze sve products
 app.get("/products", async(req,res)=>{
     try{
-        const data = await Product.find({});
+        const data = await Product.find({}).populate('author','username');
         res.json(data);
     }catch(e){
         res.json(`error: ${e}`);
@@ -59,8 +59,7 @@ app.get("/products", async(req,res)=>{
 app.get("/products/:id", async(req,res)=>{
     try{
         const { id } = req.params;
-        const data = await Product.findById(id);
-        //console.log(data);
+        const data = await Product.findById(id).populate('author','username');
         res.json(data);
     }catch(e){
         res.json(`error: ${e}`);
@@ -69,11 +68,13 @@ app.get("/products/:id", async(req,res)=>{
 
 //route for adding new product (if is logged in)
 //isLoggedIn callback middleware function (to protect adding new product on server side if user is not logged in)
-app.post("/products", /*isLoggedIn,*/ async(req,res)=>{
+app.post("/products", isLoggedIn, async(req,res)=>{
     try{
-        //console.log(req.body);
         const data = req.body;
-        const newProduct = await Product.create(data);
+        //dobivam _id od logiranog usera
+        const { _id } = req.user;
+        //create a new (and save) product with req.body and .author property with _id of logged user
+        const newProduct = await Product.create({...data, author: _id});
         res.json(newProduct);
     }catch(e){
         res.json(`error: ${e}`);
@@ -82,7 +83,7 @@ app.post("/products", /*isLoggedIn,*/ async(req,res)=>{
 
 //route for editing product (if is author) with id given as params
 //isAuthor callback middleware function (to protect editing product on server side if user is not author)
-app.put("/products/:id", /*isAuthor,*/ async(req,res)=>{
+app.put("/products/:id", /*isLoggedIn, isProductAuthor,*/ async(req,res)=>{
     try{
         console.log(req.body);
         const { id } = req.params;
@@ -97,7 +98,7 @@ app.put("/products/:id", /*isAuthor,*/ async(req,res)=>{
 
 //route for deleting product (if is author) with id given as params
 //isAuthor callback middleware function (to protect deleting product on server side if user is not author)
-app.delete("/products/:id", /*isAuthor,*/ async(req,res)=>{
+app.delete("/products/:id", /*isLoggedIn, isProductAuthor,*/ async(req,res)=>{
     try{
         const { id } = req.params;
         const deletedProduct = await Product.findOneAndDelete({_id: id});
@@ -135,7 +136,7 @@ app.post("/reviews", /*isLoggedIn,*/ async(req,res)=>{
 
 //route for editing review (if is author) with id given as params
 //isAuthor callback middleware function (to protect editing review on server side if user is not author)
-app.put("/reviews/:id", /*isAuthor,*/ async(req,res)=>{
+app.put("/reviews/:id", /*isLoggedIn, isReviewAuthor,*/ async(req,res)=>{
     try{
         //console.log(req.body);
         const { id } = req.params;
@@ -150,7 +151,7 @@ app.put("/reviews/:id", /*isAuthor,*/ async(req,res)=>{
 
 //route for deleting review (if is author) with id given as params
 //isAuthor callback middleware function (to protect deleting review on server side if user is not author)
-app.delete("/reviews/:id", /*isAuthor,*/ async(req,res)=>{
+app.delete("/reviews/:id", /*isLoggedIn, isReviewAuthor,*/ async(req,res)=>{
     try{
         const { id } = req.params;
         const deletedReview = await Review.findOneAndDelete({_id: id});
@@ -173,6 +174,7 @@ app.post('/register', async(req,res)=>{
             if(err){
                 res.json(`error: ${err}`);
             }else{
+                //console.log(req.user);
                 res.json({username: username, email: email});
             }
         });
@@ -198,7 +200,9 @@ app.get('/logout', (req,res)=>{
         if(req.isAuthenticated()){
             //console.log(req.user);
             const { username, email } = req.user;
+            //sad ćemo odlogirati korisnika (to znači da će req.user sad biti null, a req.isAuthenticated() vraća false)
             req.logout();
+            //vraćam podatke o odlogiranom user-u
             res.json({username: username, email: email});
         }else{
             res.json("User is not logged in..");
