@@ -48,7 +48,7 @@ const userSchema = new Schema({
         unique: true
     },
     products: [{type: Schema.Types.ObjectId, ref: 'Product'}],
-    reviews:[{type: Schema.Types.ObjectId, ref: 'Review'}]
+    reviews: [{type: Schema.Types.ObjectId, ref: 'Review'}]
 });
 userSchema.plugin(passportLocalMongoose);
 
