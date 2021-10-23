@@ -10,7 +10,7 @@ function isLoggedIn(req, res, next){
 }
 
 async function isProductAuthor(req, res, next){
-    //dobivam id od product-a kojeg editiram/delete-am
+    //dobivam id (as params) od product-a kojeg editiram/delete-am
     const { id } = req.params;
     const product = await Product.findById(id);
     const authorId = product.author._id;
@@ -22,7 +22,7 @@ async function isProductAuthor(req, res, next){
 }
 
 async function isReviewAuthor(req, res, next){
-    //dobivam id review-a kojeg editiram/delete-am
+    //dobivam id (as params) review-a kojeg editiram/delete-am
     const { id } = req.params;
     const review = await Review.findById(id);
     const authorId = review.author._id;

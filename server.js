@@ -111,6 +111,23 @@ app.delete("/products/:id", isLoggedIn, /*isProductAuthor,*/ async(req,res)=>{
     try{
         const { id } = req.params;
         const deletedProduct = await Product.findOneAndDelete({_id: id});
+
+        //we should delete reviews associated with deleted product
+        const reviewsToDelete = deletedProduct.reviews;
+        const noOfDeletedReviews = await Review.deleteMany({_id: {$in: reviewsToDelete}});
+        //console.log("Broj izbrisanih review-a: ", noOfDeletedReviews);
+
+        //we should update user (who is author of deleted product) property .products and .reviews
+        //dobivam _id od logiranog usera (to zapravo bude new ObjectId("......"))
+        const { _id } = req.user;
+        const userToUpdate = await User.findById(_id);
+        //da mi prodId ne bude string, nego ObjectId (kako bi kasnije mogli uspoređivati metodom .equals())
+        const prodId = new mongoose.Types.ObjectId(id);
+        const newProductsArray = userToUpdate.products.filter((item)=> !(item.equals(prodId)));
+        //newReviewsArray će sadržavati samo one reviewId-ove koji nisu u nizu reviewsToDelete (razlika među skupovima/nizovima: userToUpdate.reviews bez reviewsToDelete)
+        const newReviewsArray = userToUpdate.reviews.filter((item)=> !(reviewsToDelete.includes(item)));
+        const updatedUser = await User.findOneAndUpdate({_id: _id}, {products: newProductsArray, reviews: newReviewsArray}, {new: true});
+
         //console.log(deletedProduct);
         res.json(deletedProduct);
     }catch(e){
@@ -178,10 +195,26 @@ app.put("/reviews/:id", isLoggedIn, /*isReviewAuthor,*/ async(req,res)=>{
 
 //route for deleting review (if is author) with id given as params
 //isAuthor callback middleware function (to protect deleting review on server side if user is not author)
-app.delete("/reviews/:id", /*isLoggedIn, isReviewAuthor,*/ async(req,res)=>{
+app.delete("/reviews/:id", isLoggedIn, /*isReviewAuthor,*/ async(req,res)=>{
     try{
         const { id } = req.params;
         const deletedReview = await Review.findOneAndDelete({_id: id});
+
+        //we should update user (who is author of deleted review) property .reviews
+        //dobivam _id od logiranog usera (to zapravo bude new ObjectId("......"))
+        const { _id } = req.user;
+        const userToUpdate = await User.findById(_id);
+        //da mi reviewId ne bude string, nego ObjectId (kako bi kasnije mogli uspoređivati metodom .equals())
+        const reviewId = new mongoose.Types.ObjectId(id);
+        const newReviewsArray = userToUpdate.reviews.filter((item)=> !(item.equals(reviewId)));
+        const updatedUser = await User.findOneAndUpdate({_id: _id}, {reviews: newReviewsArray}, {new: true});
+
+        //we should update product (which is associated with deleted review) property .reviews
+        const prodId = deletedReview.product;
+        const prodToUpdate = await Product.findById(prodId);
+        const newReviewsArray2 = prodToUpdate.reviews.filter((item)=> !(item.equals(reviewId)));
+        const updatedProduct = await Product.findOneAndUpdate({_id: prodId}, {reviews: newReviewsArray2}, {new: true});
+
         //console.log(deletedReview);
         res.json(deletedReview);
     }catch(e){
