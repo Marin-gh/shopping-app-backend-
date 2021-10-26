@@ -1,7 +1,7 @@
 const { Product, Review } = require('./Models/schemas.js');
 
 function isLoggedIn(req, res, next){
-    console.log(req.user);
+    //console.log(req.user);
     if(req.isAuthenticated()){
         next();
     }else{

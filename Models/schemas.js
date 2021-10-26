@@ -26,6 +26,11 @@ const productSchema = new Schema({
     },
     //zasad će to biti niz url-ova
     image:[{type: String, required: true}],
+    avgRating:{
+        type: Number,
+        min: 0,
+        max: 5
+    },
     author:{
         type: Schema.Types.ObjectId,
         ref: 'User'

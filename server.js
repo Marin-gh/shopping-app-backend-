@@ -75,8 +75,8 @@ app.post("/products", isLoggedIn, async(req,res)=>{
         const data = req.body;
         //dobivam _id od logiranog usera (to zapravo bude new ObjectId("......"))
         const { _id } = req.user;
-        //create a new (and save) product with req.body and .author property with _id of logged user
-        const newProduct = await Product.create({...data, author: _id});
+        //create a new (and save) product with req.body and .author property with _id of logged user and with .avgRating set to 0
+        const newProduct = await Product.create({...data, author: _id, avgRating: 0});
 
         //we should update property .products of that user
         const newProductId = newProduct._id;
@@ -161,11 +161,18 @@ app.post("/reviews/:prodId", isLoggedIn, async(req,res)=>{
         //create a new (and save) review with req.body and .author property with _id of logged user and .product property with prodId
         const newReview = await Review.create({...data, author: _id, product: prodId});
 
-        //we should update property .reviews of that product
+        //we should update properties .reviews and .avgRating of that product
         const newReviewId = newReview._id;
-        const prodToUpdate = await Product.findById(prodId);
+        const prodToUpdate = await Product.findById(prodId).populate('reviews');
         const newReviewsArray = [...prodToUpdate.reviews, newReviewId];
-        const updatedProduct = await Product.findOneAndUpdate({_id: prodId}, {reviews: newReviewsArray}, {new: true});
+        let sum=0;
+        for(let i=0; i<prodToUpdate.reviews.length; i++){
+            sum = sum + prodToUpdate.reviews[i].rating;
+        };
+        sum = sum + newReview.rating;
+        const avgRating = sum / (prodToUpdate.reviews.length + 1);
+        const updatedProduct = await Product.findOneAndUpdate({_id: prodId}, {reviews: newReviewsArray, avgRating: avgRating}, {new: true});
+
 
         //we should update property .reviews of that user
         const userToUpdate = await User.findById(_id);
@@ -178,6 +185,7 @@ app.post("/reviews/:prodId", isLoggedIn, async(req,res)=>{
     }
 });
 
+/*
 //route for editing review (if is author) with id given as params
 //isAuthor callback middleware function (to protect editing review on server side if user is not author)
 app.put("/reviews/:id", isLoggedIn, isReviewAuthor, async(req,res)=>{
@@ -192,6 +200,7 @@ app.put("/reviews/:id", isLoggedIn, isReviewAuthor, async(req,res)=>{
         res.json(`error: ${e}`);
     }
 });
+*/
 
 //route for deleting review (if is author) with id given as params
 //isAuthor callback middleware function (to protect deleting review on server side if user is not author)
@@ -209,11 +218,26 @@ app.delete("/reviews/:id", isLoggedIn, isReviewAuthor, async(req,res)=>{
         const newReviewsArray = userToUpdate.reviews.filter((item)=> !(item.equals(reviewId)));
         const updatedUser = await User.findOneAndUpdate({_id: _id}, {reviews: newReviewsArray}, {new: true});
 
-        //we should update product (which is associated with deleted review) property .reviews
+        //we should update product (which is associated with deleted review) properties .reviews and .avgRating
         const prodId = deletedReview.product;
-        const prodToUpdate = await Product.findById(prodId);
+        const prodToUpdate = await Product.findById(prodId).populate('reviews');
+        console.log("Product to update:", prodToUpdate);
+        //vjerojatno može i bez filter, odnosno samo newReviewsArray2 = prodToUpdate.reviews (jer nakon gornjeg .populate('reviews') neće više biti izbrisanog review-a pod propertyjem .reviews jer ga ne može populirati)
         const newReviewsArray2 = prodToUpdate.reviews.filter((item)=> !(item.equals(reviewId)));
-        const updatedProduct = await Product.findOneAndUpdate({_id: prodId}, {reviews: newReviewsArray2}, {new: true});
+        console.log("Novi niz reviewova bez izbrisanog:", newReviewsArray2);
+        let sum=0;
+        //prodToUpdate.reviews neće imati izbrisani review jer ga ne može populirati(budući da je već obrisan)
+        for(let i=0; i<prodToUpdate.reviews.length; i++){
+            sum = sum + prodToUpdate.reviews[i].rating;
+        };
+        let avgRating;
+        if(prodToUpdate.reviews.length === 0){
+            avgRating = 0;
+        }else{
+            avgRating = sum / prodToUpdate.reviews.length;
+        }
+        console.log(sum, avgRating, prodToUpdate.reviews.length);
+        const updatedProduct = await Product.findOneAndUpdate({_id: prodId}, {reviews: newReviewsArray2, avgRating: avgRating}, {new: true});
 
         //console.log(deletedReview);
         res.json(deletedReview);
