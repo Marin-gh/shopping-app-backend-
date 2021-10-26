@@ -59,6 +59,12 @@ const reviewSchema = new Schema({
         maxlength: 300,
         required: true
     },
+    rating:{
+        type: Number,
+        max: 5,
+        min: 1,
+        required: true
+    },
     author:{
         type: Schema.Types.ObjectId,
         ref: 'User'
