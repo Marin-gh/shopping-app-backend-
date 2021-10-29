@@ -1,3 +1,7 @@
+if (process.env.NODE_ENV !== "production"){
+    require('dotenv').config();
+};
+
 const express = require('express');
 const app = express();
 const cors = require('cors');
@@ -8,6 +12,8 @@ const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
 //const cookieParser = require('cookie-parser');
 const { isLoggedIn, isProductAuthor, isReviewAuthor } = require('./helper.js');
+const multer = require('multer');
+const { storage, cloudinary } = require('./cloudinaryConfig.js');
 
 //connecting to db
 async function connectDB(){
@@ -44,6 +50,9 @@ passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
+//multer config
+const upload = multer({storage: storage}).array('images', 5);
+
 
 //dohvati iz baze sve products
 app.get("/products", async(req,res)=>{
@@ -70,13 +79,20 @@ app.get("/products/:id", async(req,res)=>{
 
 //route for adding new product (if is logged in)
 //isLoggedIn callback middleware function (to protect adding new product on server side if user is not logged in)
-app.post("/products", isLoggedIn, async(req,res)=>{
+app.post("/products", isLoggedIn, upload, async(req,res)=>{
     try{
-        const data = req.body;
+        //req.body sadrži propertyje koji nisu file-ovi, a req.files sadrži niz objekata/file-ova
+        //console.log(req.body);
+        //console.log(req.files);
         //dobivam _id od logiranog usera (to zapravo bude new ObjectId("......"))
         const { _id } = req.user;
+        //req.files (nakon middleware upload) sad sadrži niz objekata (a svaki objekt sadrži info/propertyje o uploadanim images, među ostalim i property .path i property .filename)
+        const images = req.files.map((image)=>{
+            return {url: image.path, filename: image.filename};
+        });
+        //console.log(images);
         //create a new (and save) product with req.body and .author property with _id of logged user and with .avgRating set to 0
-        const newProduct = await Product.create({...data, author: _id, avgRating: 0});
+        const newProduct = await Product.create({...req.body, images: images, author: _id, avgRating: 0});
 
         //we should update property .products of that user
         const newProductId = newProduct._id;
@@ -92,13 +108,39 @@ app.post("/products", isLoggedIn, async(req,res)=>{
 
 //route for editing product (if is author) with id given as params
 //isAuthor callback middleware function (to protect editing product on server side if user is not author)
-app.put("/products/:id", isLoggedIn, isProductAuthor, async(req,res)=>{
+app.put("/products/:id", isLoggedIn, isProductAuthor, upload, async(req,res)=>{
     try{
+        //req.body sadrži propertyje koji nisu file-ovi, a req.files sadrži niz objekata/file-ova
         //console.log(req.body);
+        //console.log(req.files);
+        //req.files (nakon middleware upload) sad sadrži niz objekata (a svaki objekt sadrži info/propertyje o uploadanim images, među ostalim i property .path i property .filename)
+        const images = req.files.map((image)=>{
+            return {url: image.path, filename: image.filename};
+        });
+        //oldImages koje korisnik želi zadržati
+        let { oldImages } = req.body;
+        oldImages = JSON.parse(oldImages);
+        const newImages = [...images, ...oldImages];
         const { id } = req.params;
-        const data = req.body;
-        const updatedProduct = await Product.findOneAndUpdate({_id: id}, data, {new: true});
+        //dodajem novouploadane slike i one stare koje je korisnik odlučio zadržati (jos izbrisati iz Cloudinary one stare koje korisnik nije htio zadržati), ali vraćam product koji ću update-ati (prije update-anja zbog ovog kasnije)
+        const updatedProduct = await Product.findOneAndUpdate({_id: id}, {...req.body, images: newImages});
         //console.log(updatedProduct);
+
+        //we should delete images from Cloudinary that user decides not to keep (images od producta kojeg update-amo bez oldImages koje korisnik želi zadržati)
+        const imagesToDelete = updatedProduct.images.filter((item)=>{
+            for(let i=0; i<oldImages.length; i++){
+                if(item.url === oldImages[i].url){
+                    return false;
+                }
+            };
+            return true;
+        });
+        for(let i=0; i<imagesToDelete.length; i++){
+            cloudinary.uploader.destroy(imagesToDelete[i].filename, function(error,result) {
+                console.log(result, error) });
+        };
+
+
         res.json(updatedProduct);
     }catch(e){
         res.json(`error: ${e}`);
@@ -127,6 +169,14 @@ app.delete("/products/:id", isLoggedIn, isProductAuthor, async(req,res)=>{
         //newReviewsArray će sadržavati samo one reviewId-ove koji nisu u nizu reviewsToDelete (razlika među skupovima/nizovima: userToUpdate.reviews bez reviewsToDelete)
         const newReviewsArray = userToUpdate.reviews.filter((item)=> !(reviewsToDelete.includes(item)));
         const updatedUser = await User.findOneAndUpdate({_id: _id}, {products: newProductsArray, reviews: newReviewsArray}, {new: true});
+
+
+        //we should delete images from Cloudinary associated with deleted product
+        const imagesToDelete = deletedProduct.images;
+        for(let i=0; i<imagesToDelete.length; i++){
+            cloudinary.uploader.destroy(imagesToDelete[i].filename, function(error,result) {
+                console.log(result, error) });
+        };
 
         //console.log(deletedProduct);
         res.json(deletedProduct);

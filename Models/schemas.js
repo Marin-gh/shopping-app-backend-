@@ -25,7 +25,7 @@ const productSchema = new Schema({
         required: true
     },
     //zasad će to biti niz url-ova
-    image:[{type: String, required: true}],
+    images: [{url: {type: String, required: true}, filename: {type: String, required: true}}],
     avgRating:{
         type: Number,
         min: 0,
