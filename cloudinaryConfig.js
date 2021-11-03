@@ -12,7 +12,7 @@ const storage = new CloudinaryStorage({
     params: {
       folder: "ShoppingApp",
       allowedFormats: ['jpeg', 'png', 'jpg'],
-      transformation: {background: '#FDF5EA', width: 800, crop: "pad"}
+      transformation: {background: '#FDF5EA', width: 800, height: 600, crop: "pad"}
     }
   });
 

@@ -70,6 +70,10 @@ const reviewSchema = new Schema({
         min: 1,
         required: true
     },
+    date:{
+        type: Date,
+        required: true
+    },
     author:{
         type: Schema.Types.ObjectId,
         ref: 'User'
